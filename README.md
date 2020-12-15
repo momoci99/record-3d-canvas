@@ -1,6 +1,6 @@
 # Record-3d-Canvas
 
-three.js를 이용한 3d canavs와 2d canvas를 사용한 레코딩을 비교하는 코드입니다.
+three.js를 이용한 3d canvas와 2d canvas를 사용한 레코딩을 비교하는 코드입니다.
 
 Inspired with
 https://codepen.io/srzxrjnb/pen/XWdjyOd
