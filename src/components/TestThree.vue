@@ -4,6 +4,7 @@
     <div class="header">
       <button @click="start">Start</button>
       <button @click="end">End</button>
+      <button @click="swap">swap</button>
       <select id="resolution">
         <option value="360p">360p</option>
         <option value="480op">480p</option>
@@ -16,11 +17,28 @@
       </select>
     </div>
     <hr />
-    <h2>video</h2>
+    <!-- <section>
+      <h2>stream</h2>
+      <video
+        :srcObject.prop="camStream"
+        autoplay
+        id="cam-video"
+        style="width:500px; height:500px;"
+      ></video>
+      <video
+        :srcObject.prop="screenStream"
+        autoplay
+        id="screen-video"
+        style="width:500px; height:500px;"
+      ></video>
+    </section>
+    <hr /> -->
+    <h2>current stream</h2>
     <video
+      :srcObject.prop="currentStream"
+      autoplay
       id="video"
       style="width:500px; height:500px;"
-      :srcObject.prop="currentStream"
     ></video>
     <hr />
     <h2>canvas</h2>
@@ -45,17 +63,19 @@ export default {
       height: 360,
 
       mediaRecorder: null,
-      recordedChunks: []
+      recordedChunks: [],
+
+      camStream: null,
+      screenStream: null,
+
+      //현재 녹화될 video element
+      targetVideo: null,
+      toggle: false
     }
   },
   methods: {
     async start() {
       console.log("스타트")
-
-      await this.getMedia({
-        audio: true,
-        video: { width: 1920, height: 1080 }
-      })
 
       let e = document.getElementById("resolution")
 
@@ -132,14 +152,23 @@ export default {
 
     async getMedia(constraints) {
       try {
-        this.currentStream = await navigator.mediaDevices.getDisplayMedia(
+        this.screenStream = await navigator.mediaDevices.getDisplayMedia(
           constraints
         )
-        console.log(this.currentStream)
+
+        this.currentStream = this.screenStream
         /* use the stream */
       } catch (err) {
         /* handle the error */
         console.error(err)
+      }
+    },
+
+    async getCam(constraints) {
+      try {
+        this.camStream = await navigator.mediaDevices.getUserMedia(constraints)
+      } catch (err) {
+        console.log(err)
       }
     },
 
@@ -157,18 +186,17 @@ export default {
       const material = new THREE.MeshBasicMaterial({
         map: this.texture
       })
+
+      //2차원 평면 생성
+      // const geometry = new THREE.PlaneGeometry(this.width, this.height)
       const geometry = new THREE.PlaneGeometry(272, 153)
       const plane = new THREE.Mesh(geometry, material)
 
       this.scene = new THREE.Scene()
       this.scene.add(plane)
 
-      this.camera = new THREE.PerspectiveCamera(
-        75,
-        this.width / this.height,
-        99,
-        100
-      )
+      //plane geometry라 aspect ratio 외에는 크게 의마가 없는듯
+      this.camera = new THREE.PerspectiveCamera(75, 1.77, 99, 100)
       this.camera.position.z = 100
 
       //render the scene
@@ -202,10 +230,24 @@ export default {
       a.download = "test.webm"
       a.click()
       window.URL.revokeObjectURL(url)
+    },
+    swap() {
+      console.log("switch")
+      console.log(this.toggle)
+      const video = document.getElementById("video")
+
+      this.currentStream = this.toggle ? this.camStream : this.screenStream
+      console.log(video)
+      this.toggle = !this.toggle
     }
   },
   async mounted() {
     this.canvas3d = document.getElementById("canvas_3d")
+    await this.getCam({ video: true, audio: true })
+    await this.getMedia({
+      audio: true,
+      video: { width: 1920, height: 1080 }
+    })
   }
 }
 </script>
