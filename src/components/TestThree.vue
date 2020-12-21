@@ -1,23 +1,25 @@
 <template>
-  <div>
-    Input is Fixed 1920 1080
-    <div class="header">
-      <button @click="start">Start</button>
-      <button @click="end">End</button>
-      <button @click="swap">swap</button>
-      <select id="resolution">
-        <option value="360p">360p</option>
-        <option value="480op">480p</option>
-        <option value="720p">720p</option>
-        <option value="1080p">1080p</option>
-      </select>
-      <select id="canvas-style">
-        <option value="2d">2d</option>
-        <option value="3d">3d</option>
-      </select>
-    </div>
-    <hr />
-    <!-- <section>
+	<div>
+		Input is Fixed 1920 1080
+		<div class="header">
+			<button @click="start">Start</button>
+			<button @click="end">End</button>
+			<button @click="swap">swap</button>
+			<select id="resolution">
+				<option value="360p">360p</option>
+				<option value="480op">480p</option>
+				<option value="720p">720p</option>
+				<option value="1080p">1080p</option>
+				<option value="1440p">1440p</option>
+				<option value="2160p">2160p</option>
+			</select>
+			<select id="canvas-style">
+				<option value="2d">2d</option>
+				<option value="3d">3d</option>
+			</select>
+		</div>
+		<hr />
+		<!-- <section>
       <h2>stream</h2>
       <video
         :srcObject.prop="camStream"
@@ -33,227 +35,269 @@
       ></video>
     </section>
     <hr /> -->
-    <h2>current stream</h2>
-    <video
-      :srcObject.prop="currentStream"
-      autoplay
-      id="video"
-      style="width:500px; height:500px;"
-    ></video>
-    <hr />
-    <h2>canvas</h2>
-    <canvas id="canvas_3d"></canvas>
-    <canvas id="canvas_2d"></canvas>
-  </div>
+		<h2>current stream</h2>
+		<video
+			:srcObject.prop="currentStream"
+			autoplay
+			id="video"
+			style="width: 500px; height: 500px"
+		></video>
+		<hr />
+		<h2>canvas</h2>
+		<canvas id="canvas_3d"></canvas>
+		<canvas id="canvas_2d" style="display: none"></canvas>
+	</div>
 </template>
 
 <script>
 import * as THREE from "three"
 export default {
-  name: "TestThree",
-  data() {
-    return {
-      currentStream: null,
-      renderer: null,
-      scene: null,
-      camera: null,
-      texture: null,
+	name: "TestThree",
+	data() {
+		return {
+			currentStream: null,
+			renderer: null,
+			scene: null,
+			camera: null,
+			texture: null,
 
-      width: 640,
-      height: 360,
+			width: 640,
+			height: 360,
 
-      mediaRecorder: null,
-      recordedChunks: [],
+			mediaRecorder: null,
+			recordedChunks: [],
 
-      camStream: null,
-      screenStream: null,
+			camStream: null,
+			screenStream: null,
 
-      //현재 녹화될 video element
-      targetVideo: null,
-      toggle: false
-    }
-  },
-  methods: {
-    async start() {
-      console.log("스타트")
+			targetVideo: null,
+			toggle: false,
 
-      let e = document.getElementById("resolution")
+			canvas_style: null,
 
-      const canvas_style = document.getElementById("canvas-style").value
-      this.setRes(e.value)
+			//for time slice
+			timeSlice: 5000,
 
-      const video = document.getElementById("video")
-      video.play()
-      const options = { mimeType: "video/webm; codecs=vp9" }
+			timer: null,
+		}
+	},
+	methods: {
+		async start() {
+			console.log("스타트")
 
-      if (canvas_style === "2d") {
-        this.start2D()
-        const canvas_2d = document.getElementById("canvas_2d")
-        const stream = canvas_2d.captureStream()
-        this.mediaRecorder = new MediaRecorder(stream, options)
-        this.mediaRecorder.ondataavailable = this.handleDataAvailable
-        this.mediaRecorder.start()
+			let e = document.getElementById("resolution")
 
-        //2d
-      } else if (canvas_style === "3d") {
-        //3d
-        this.threeRender(video)
+			this.canvas_style = document.getElementById("canvas-style").value
+			this.setRes(e.value)
 
-        const stream = this.renderer.domElement.captureStream(30)
+			await this.getCam({
+				video: { width: this.width, height: this.height },
+				audio: true,
+			})
+			await this.getMedia({
+				video: { width: this.width, height: this.height },
+				audio: true,
+			})
 
-        this.mediaRecorder = new MediaRecorder(stream, options)
-        this.mediaRecorder.ondataavailable = this.handleDataAvailable
-        this.mediaRecorder.start()
-      }
-    },
-    start2D() {
-      const canvas_2d = document.getElementById("canvas_2d")
-      const video = document.getElementById("video")
-      this.draw(canvas_2d, video, 0, 0, this.width, this.height)
+			const video = document.getElementById("video")
+			video.play()
+			const options = { mimeType: "video/webm; codecs=vp9" }
 
-      canvas_2d.width = this.width
-      canvas_2d.height = this.height
-    },
-    draw(canvas_2d, video, dx, dy, width, heigth) {
-      const ctx = canvas_2d.getContext("2d")
-      ctx.drawImage(video, dx, dy, width, heigth)
-      setTimeout(() => {
-        this.draw(canvas_2d, video, dx, dy, width, heigth)
-      }, 25)
-    },
-    end() {
-      if (this.mediaRecorder) {
-        this.mediaRecorder.stop()
-      }
-      this.recordedChunks = []
+			if (this.canvas_style === "2d") {
+				this.start2D()
+				const canvas_2d = document.getElementById("canvas_2d")
+				const stream = canvas_2d.captureStream()
+				this.mediaRecorder = new MediaRecorder(stream, options)
+				this.mediaRecorder.ondataavailable = this.handleDataAvailable
+				this.mediaRecorder.start()
 
-      console.log("end")
-    },
-    setRes(selectedRes) {
-      switch (selectedRes) {
-        case "360p":
-          this.width = 640
-          this.height = 360
-          break
-        case "480p":
-          this.width = 854
-          this.height = 480
-          break
-        case "720p":
-          this.width = 1280
-          this.height = 720
-          break
-        case "1080p":
-          this.width = 1920
-          this.height = 1080
-          break
-      }
-    },
+				//2d
+			} else if (this.canvas_style === "3d") {
+				//3d
+				this.threeRender(video)
 
-    async getMedia(constraints) {
-      try {
-        this.screenStream = await navigator.mediaDevices.getDisplayMedia(
-          constraints
-        )
+				const stream = this.renderer.domElement.captureStream(24)
 
-        this.currentStream = this.screenStream
-        /* use the stream */
-      } catch (err) {
-        /* handle the error */
-        console.error(err)
-      }
-    },
+				this.mediaRecorder = new MediaRecorder(stream, options)
+				this.mediaRecorder.ondataavailable = this.handleDataAvailable
+				this.mediaRecorder.start()
+			}
+			// this.timeSlicer()
+		},
+		start2D() {
+			const canvas_2d = document.getElementById("canvas_2d")
+			const video = document.getElementById("video")
+			this.draw(canvas_2d, video, 0, 0, this.width, this.height)
 
-    async getCam(constraints) {
-      try {
-        this.camStream = await navigator.mediaDevices.getUserMedia(constraints)
-      } catch (err) {
-        console.log(err)
-      }
-    },
+			canvas_2d.width = this.width
+			canvas_2d.height = this.height
+		},
+		draw(canvas_2d, video, dx, dy, width, heigth) {
+			const ctx = canvas_2d.getContext("2d", { alpha: false })
+			ctx.drawImage(video, dx, dy, width, heigth)
+			//1초에 약 24번 drawing을 수행하여 24fps 구현
+			setTimeout(() => {
+				this.draw(canvas_2d, video, dx, dy, width, heigth)
+			}, 40)
+		},
+		end() {
+			if (this.mediaRecorder) {
+				this.mediaRecorder.stop()
+				clearInterval(this.timer)
+			}
+			this.recordedChunks = []
 
-    threeRender(video) {
-      this.renderer = new THREE.WebGLRenderer({
-        canvas: this.canvas3d,
-        powerPreference: "high-performance"
-      })
+			console.log("end")
+		},
+		setRes(selectedRes) {
+			switch (selectedRes) {
+				case "360p":
+					this.width = 640
+					this.height = 360
+					break
+				case "480p":
+					this.width = 854
+					this.height = 480
+					break
+				case "720p":
+					this.width = 1280
+					this.height = 720
+					break
+				case "1080p":
+					this.width = 1920
+					this.height = 1080
+					break
+				case "1440p":
+					this.width = 2560
+					this.height = 1440
+					break
+				case "2160p":
+					this.width = 3840
+					this.height = 2160
+					break
+			}
+		},
 
-      this.renderer.setSize(this.width, this.height)
+		async getMedia(constraints) {
+			try {
+				this.screenStream = await navigator.mediaDevices.getDisplayMedia(
+					constraints
+				)
 
-      // load a texture, set wrap mode to repeat
-      this.texture = new THREE.VideoTexture(video)
-      this.texture.minFilter = THREE.LinearFilter
-      const material = new THREE.MeshBasicMaterial({
-        map: this.texture
-      })
+				this.currentStream = this.screenStream
+				/* use the stream */
+			} catch (err) {
+				/* handle the error */
+				console.error(err)
+			}
+		},
 
-      //2차원 평면 생성
-      // const geometry = new THREE.PlaneGeometry(this.width, this.height)
-      const geometry = new THREE.PlaneGeometry(272, 153)
-      const plane = new THREE.Mesh(geometry, material)
+		async getCam(constraints) {
+			try {
+				this.camStream = await navigator.mediaDevices.getUserMedia(constraints)
+			} catch (err) {
+				console.log(err)
+			}
+		},
 
-      this.scene = new THREE.Scene()
-      this.scene.add(plane)
+		threeRender(video) {
+			this.renderer = new THREE.WebGLRenderer({
+				canvas: this.canvas3d,
+				powerPreference: "high-performance",
+			})
 
-      //plane geometry라 aspect ratio 외에는 크게 의마가 없는듯
-      this.camera = new THREE.PerspectiveCamera(75, 1.77, 99, 100)
-      this.camera.position.z = 100
+			this.renderer.setSize(this.width, this.height)
 
-      //render the scene
+			// load a texture, set wrap mode to repeat
+			this.texture = new THREE.VideoTexture(video)
+			this.texture.minFilter = THREE.LinearFilter
+			const material = new THREE.MeshBasicMaterial({
+				map: this.texture,
+			})
 
-      this.render()
-    },
-    render() {
-      requestAnimationFrame(this.render)
-      this.texture.needsUpdate = true
-      this.renderer.render(this.scene, this.camera)
-    },
-    handleDataAvailable(event) {
-      console.log("data-available")
-      if (event.data.size > 0) {
-        this.recordedChunks.push(event.data)
-        console.log(this.recordedChunks)
-        this.download()
-      } else {
-        console.log("nononono")
-      }
-    },
-    download() {
-      var blob = new Blob(this.recordedChunks, {
-        type: "video/webm"
-      })
-      var url = URL.createObjectURL(blob)
-      var a = document.createElement("a")
-      document.body.appendChild(a)
-      a.style = "display: none"
-      a.href = url
-      a.download = "test.webm"
-      a.click()
-      window.URL.revokeObjectURL(url)
-    },
-    swap() {
-      console.log("switch")
-      console.log(this.toggle)
-      const video = document.getElementById("video")
+			//2차원 평면 생성
+			// const geometry = new THREE.PlaneGeometry(this.width, this.height)
+			const geometry = new THREE.PlaneGeometry(272, 153)
+			const plane = new THREE.Mesh(geometry, material)
 
-      this.currentStream = this.toggle ? this.camStream : this.screenStream
-      console.log(video)
-      this.toggle = !this.toggle
-    }
-  },
-  async mounted() {
-    this.canvas3d = document.getElementById("canvas_3d")
-    await this.getCam({ video: true, audio: true })
-    await this.getMedia({
-      audio: true,
-      video: { width: 1920, height: 1080 }
-    })
-  }
+			this.scene = new THREE.Scene()
+			this.scene.add(plane)
+
+			//plane geometry라 aspect ratio 외에는 크게 의마가 없는듯???
+			this.camera = new THREE.PerspectiveCamera(75, 1.77, 99, 100)
+			this.camera.position.z = 100
+
+			//render the scene
+
+			this.render()
+		},
+		render() {
+			requestAnimationFrame(this.render)
+			this.texture.needsUpdate = true
+			this.renderer.render(this.scene, this.camera)
+		},
+		handleDataAvailable(event) {
+			console.log("data-available")
+			if (event.data.size > 0) {
+				this.recordedChunks.push(event.data)
+				console.log(this.recordedChunks)
+				this.download()
+			} else {
+				console.log("nononono")
+			}
+		},
+		download() {
+			var blob = new Blob(this.recordedChunks, {
+				type: "video/mp4",
+			})
+			var url = URL.createObjectURL(blob)
+			var a = document.createElement("a")
+			document.body.appendChild(a)
+			a.style = "display: none"
+			a.href = url
+			a.download =
+				"test" +
+				this.width +
+				"x" +
+				this.height +
+				"_" +
+				this.canvas_style +
+				".mp4"
+			a.click()
+			window.URL.revokeObjectURL(url)
+		},
+
+		//안됨 에러남 ㅋ
+		swap() {
+			console.log("switch")
+			console.log(this.toggle)
+			const video = document.getElementById("video")
+
+			this.currentStream = this.toggle ? this.camStream : this.screenStream
+			console.log(video)
+			this.toggle = !this.toggle
+		},
+
+		timeSlicer() {
+			this.timer = setTimeout(() => {
+				if (!this.mediaRecorder) {
+					return
+				}
+
+				if (this.mediaRecorder.state === "recording") {
+					this.mediaRecorder.requestData()
+				}
+			}, this.timeSlice)
+		},
+	},
+	async mounted() {
+		this.canvas3d = document.getElementById("canvas_3d")
+	},
 }
 </script>
 
 <style>
 .header {
-  display: flex;
+	display: flex;
 }
 </style>
