@@ -1,6 +1,5 @@
 <template>
 	<div>
-		Input is Fixed 1920 1080
 		<div class="header">
 			<button @click="start">Start</button>
 			<button @click="end">End</button>
@@ -19,22 +18,55 @@
 			</select>
 		</div>
 		<hr />
-		<!-- <section>
-      <h2>stream</h2>
-      <video
-        :srcObject.prop="camStream"
-        autoplay
-        id="cam-video"
-        style="width:500px; height:500px;"
-      ></video>
-      <video
-        :srcObject.prop="screenStream"
-        autoplay
-        id="screen-video"
-        style="width:500px; height:500px;"
-      ></video>
-    </section>
-    <hr /> -->
+
+
+		<video
+			id="video-sample-4k"
+			src="../../public/fireworks.mp4"
+			autoplay
+			muted
+			loop
+			class="video-conf"
+		></video>
+		<!-- <h2>conference</h2>
+		<video
+			id="video-sample-4k"
+			src="../../public/fireworks.mp4"
+			autoplay
+			muted
+			loop
+			class="video-conf"
+		></video>
+		<video
+			src="../../public/fireworks.mp4"
+			autoplay
+			muted
+			loop
+			class="video-conf"
+		></video>
+		<video
+			src="../../public/fireworks.mp4"
+			autoplay
+			muted
+			loop
+			class="video-conf"
+		></video>
+		<video
+			src="../../public/fireworks.mp4"
+			autoplay
+			muted
+			loop
+			class="video-conf"
+		></video>
+		<video
+			src="../../public/fireworks.mp4"
+			autoplay
+			muted
+			loop
+			class="video-conf"
+		></video> -->
+
+		<hr />
 		<h2>current stream</h2>
 		<video
 			:srcObject.prop="currentStream"
@@ -44,7 +76,7 @@
 		></video>
 		<hr />
 		<h2>canvas</h2>
-		<canvas id="canvas_3d"></canvas>
+		<canvas id="canvas_3d" style="display: none"></canvas>
 		<canvas id="canvas_2d" style="display: none"></canvas>
 	</div>
 </template>
@@ -61,8 +93,8 @@ export default {
 			camera: null,
 			texture: null,
 
-			width: 640,
-			height: 360,
+			width: 1920,
+			height: 1080,
 
 			mediaRecorder: null,
 			recordedChunks: [],
@@ -88,40 +120,41 @@ export default {
 			let e = document.getElementById("resolution")
 
 			this.canvas_style = document.getElementById("canvas-style").value
-			this.setRes(e.value)
+			const selectedRes = e.value
+			this.setRes(selectedRes)
 
-			await this.getCam({
-				video: { width: this.width, height: this.height },
-				audio: true,
-			})
-			await this.getMedia({
-				video: { width: this.width, height: this.height },
-				audio: true,
-			})
+			// await this.getCam({
+			// 	video: { width: this.width, height: this.height },
+			// 	audio: true,
+			// })
 
 			const video = document.getElementById("video")
 			video.play()
 			const options = { mimeType: "video/webm; codecs=vp9" }
 
+			let recordingStream = new MediaStream()
+
 			if (this.canvas_style === "2d") {
 				this.start2D()
 				const canvas_2d = document.getElementById("canvas_2d")
 				const stream = canvas_2d.captureStream()
-				this.mediaRecorder = new MediaRecorder(stream, options)
-				this.mediaRecorder.ondataavailable = this.handleDataAvailable
-				this.mediaRecorder.start()
-
-				//2d
+				recordingStream.addTrack(stream.getVideoTracks()[0])
 			} else if (this.canvas_style === "3d") {
-				//3d
 				this.threeRender(video)
-
 				const stream = this.renderer.domElement.captureStream(24)
-
-				this.mediaRecorder = new MediaRecorder(stream, options)
-				this.mediaRecorder.ondataavailable = this.handleDataAvailable
-				this.mediaRecorder.start()
+				recordingStream.addTrack(stream.getVideoTracks()[0])
 			}
+
+			//4k는 샘플영상에서 스트림을 취할생각임
+			if (selectedRes === "2160p") {
+				const sample_video = document.getElementById("video-sample-4k")
+				this.currentStream = sample_video.captureStream()
+				recordingStream = this.currentStream
+			} else {
+				recordingStream.addTrack(this.currentStream.getAudioTracks()[0])
+			}
+
+			this.startRecording(recordingStream, options)
 			// this.timeSlicer()
 		},
 		start2D() {
@@ -171,6 +204,7 @@ export default {
 					this.width = 2560
 					this.height = 1440
 					break
+
 				case "2160p":
 					this.width = 3840
 					this.height = 2160
@@ -184,7 +218,7 @@ export default {
 					constraints
 				)
 
-				this.currentStream = this.screenStream
+				this.currentStream = this.camStream
 				/* use the stream */
 			} catch (err) {
 				/* handle the error */
@@ -195,6 +229,7 @@ export default {
 		async getCam(constraints) {
 			try {
 				this.camStream = await navigator.mediaDevices.getUserMedia(constraints)
+				this.currentStream = this.camStream
 			} catch (err) {
 				console.log(err)
 			}
@@ -237,13 +272,17 @@ export default {
 			this.renderer.render(this.scene, this.camera)
 		},
 		handleDataAvailable(event) {
-			console.log("data-available")
-			if (event.data.size > 0) {
-				this.recordedChunks.push(event.data)
-				console.log(this.recordedChunks)
-				this.download()
-			} else {
-				console.log("nononono")
+			try {
+				console.log("data-available")
+				if (event.data.size > 0) {
+					this.recordedChunks.push(event.data)
+					console.log(this.recordedChunks)
+					this.download()
+				} else {
+					console.log("nononono")
+				}
+			} catch (e) {
+				console.error(e)
 			}
 		},
 		download() {
@@ -289,9 +328,18 @@ export default {
 				}
 			}, this.timeSlice)
 		},
+		startRecording(stream, options) {
+			this.mediaRecorder = new MediaRecorder(stream, options)
+			this.mediaRecorder.ondataavailable = this.handleDataAvailable
+			this.mediaRecorder.start()
+		},
 	},
 	async mounted() {
 		this.canvas3d = document.getElementById("canvas_3d")
+		await this.getCam({
+			video: { width: this.width, height: this.height },
+			audio: true,
+		})
 	},
 }
 </script>
@@ -299,5 +347,9 @@ export default {
 <style>
 .header {
 	display: flex;
+}
+.video-conf {
+	width: 360px;
+	height: 180px;
 }
 </style>
